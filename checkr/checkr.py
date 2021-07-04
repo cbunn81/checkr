@@ -12,6 +12,7 @@ from timeit import default_timer as timer
 # - TODO - Intermediate: Display progress bar
 # - TODO - Intermediate: Allow for levels of verbosity in output
 # - TODO - Intermediate: Make hash algorithm a command argument
+# - TODO - Intermediate: Allow for a config file to set command arguments
 # - TODO - Advanced: Switch to SQLAlchemy ORM instead of CSV files
 # - TODO - Advanced: Test multithreading/multiprocessing
 
