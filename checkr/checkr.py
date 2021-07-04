@@ -7,7 +7,8 @@ from timeit import default_timer as timer
 # - TODO - Basic: Store checksums and filenames in a CSV text file
 # - TODO - Basic: Run checksums and compare to those stored
 # - TODO - Intermediate: Integrate Typer
-# - TODO - Intermediate: Make directory a command argument
+# - TODO - Intermediate: Make input directory a command argument
+# - TODO - Intermediate: Make output file a command argument
 # - TODO - Intermediate: Log errors to a file and stdout
 # - TODO - Intermediate: Display progress bar
 # - TODO - Intermediate: Allow for levels of verbosity in output
