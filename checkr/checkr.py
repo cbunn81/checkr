@@ -36,7 +36,15 @@ def blake2b(filename: str) -> str:
     return file_hash.hexdigest()
 
 
-def checkfiles(input_path: str) -> list[dict]:
+def create_checksum(filename: str, algorithm: str = "blake2b"):
+    if algorithm == "blake2b":
+        return blake2b(filename)
+    elif algorithm == "md5":
+        return md5(filename)
+
+
+# TODO - optionally run as recursive
+def scan_directory(input_path: str, algorithm: str = "blake2b") -> list[dict]:
     dir = Path(input_path)
     results = []
     if not dir.exists():
@@ -51,47 +59,89 @@ def checkfiles(input_path: str) -> list[dict]:
             # print(str(file))
             # print(type(str(file)))
             # print(blake2b(file))
-            results.append({"filename": str(file), "blake2b_checksum": blake2b(file)})
+            results.append(
+                {
+                    "filename": str(file),
+                    "algorithm": algorithm,
+                    "checksum": blake2b(file),
+                }
+            )
         return results
 
 
-def write_csv(filename: str, results: list[dict]):
-    with open(filename, "w", newline="") as csvfile:
+def write_csv(csvfilename: str, results: list[dict]):
+    with open(csvfilename, "w", newline="") as csvfile:
         fieldnames = list(results[0].keys())
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(results)
 
 
+def get_stored_checksum_from_csv(
+    csvfilename: str, checkfilename: str, algorithm: str = "blake2b"
+) -> str:
+    with open(csvfilename, newline="") as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            if row["filename"] == checkfilename and row["algorithm"] == algorithm:
+                return row["checksum"]
+
+
+def check_file_against_csv(
+    csvfilename: str, checkfilename: str, algorithm: str = "blake2b"
+) -> bool:
+    stored_checksum = get_stored_checksum_from_csv(
+        csvfilename=csvfilename, checkfilename=checkfilename, algorithm=algorithm
+    )
+    if stored_checksum is not None:
+        new_checksum = create_checksum(filename=checkfilename, algorithm=algorithm)
+        if stored_checksum == new_checksum:
+            print("Checksums match! Yay!")
+            return True
+        else:
+            print("Checksums DON'T match. Oh no!")
+            return False
+    else:
+        print(
+            f"No checksum exists for file ({checkfilename}) in CSV file ({csvfilename})."
+        )
+
+
+def check_directory(csvfilename: str, path: str, algorithm: str = "blake2b"):
+    dir = Path(path)
+    num_good = 0
+    num_bad = 0
+    total = 0
+    if not dir.exists():
+        print(f"The directory '{dir}' does not exist.")
+        return
+    elif not dir.is_dir():
+        print(f"'{dir}' is not a directory.")
+        return
+    else:
+        filelist = dir.glob("*")
+        for file in filelist:
+            if check_file_against_csv(
+                csvfilename=csvfilename, checkfilename=str(file), algorithm=algorithm
+            ):
+                print(f"File ({file}) passed the check.")
+                num_good += 1
+            else:
+                print(f"File ({file}) FAILED the check.")
+                num_bad += 1
+            total += 1
+        print(
+            f"Check completed. {num_bad} files failed out of {total} total files checked."
+        )
+
+
 def main():
     directory = "/Users/cbunn/projects/checkr/data/"
-    results = checkfiles(directory)
+    results = scan_directory(directory)
     print(results)
-    csvfile = "/Users/cbunn/projects/checkr/data/results.csv"
+    csvfile = "/Users/cbunn/projects/checkr/results.csv"
     write_csv(csvfile, results)
-
-    # start_md5 = timer()
-    # file_hash = md5(filename=filename)
-    # end_md5 = timer()
-    # print(type(file_hash))
-    # print(file_hash)
-    # print("MD5 completed in ")
-    # print(end_md5 - start_md5)
-
-    # filename = "/Users/cbunn/projects/checkr/data/D3S_24191.NEF"
-    # existing_blake2b_hash = "63aca612bf686aaa34847d381a047eb4c7d096284ec2aabe80218149f85b457871f2758b6d6b0edfc6534a9c16e90ce3875182a219e4bc7120870ce508347c11"
-    # new_blake2b_hash = blake2b(filename=filename)
-    # if existing_blake2b_hash == new_blake2b_hash:
-    #     print("Hashes match!")
-    # else:
-    #     print("Hashes DON'T match!")
-    # start_blake2b = timer()
-    # file_hash = blake2b(filename=filename)
-    # end_blake2b = timer()
-    # print(type(file_hash))
-    # print(file_hash)
-    # print("Blake2b completed in ")
-    # print(end_blake2b - start_blake2b)
+    check_directory(csvfilename=csvfile, path=directory)
 
 
 if __name__ == "__main__":
