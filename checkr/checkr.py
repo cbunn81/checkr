@@ -1,11 +1,12 @@
 import hashlib
 from timeit import default_timer as timer
 from pathlib import Path
+import csv
 
 
 # To do list
 # - DONE - Basic: Run checksum on a directory of files
-# - TODO - Basic: Store checksums and filenames in a CSV text file
+# - DONE - Basic: Store checksums and filenames in a CSV text file
 # - TODO - Basic: Run checksums and compare to those stored
 # - TODO - Intermediate: Integrate Typer
 # - TODO - Intermediate: Make input directory a command argument
@@ -35,22 +36,39 @@ def blake2b(filename: str) -> str:
     return file_hash.hexdigest()
 
 
-def checkfiles(input_path: str):
+def checkfiles(input_path: str) -> list[dict]:
     dir = Path(input_path)
+    results = []
     if not dir.exists():
         print(f"The directory '{dir}' does not exist.")
+        return
     elif not dir.is_dir():
         print(f"'{dir}' is not a directory.")
+        return
     else:
         filelist = dir.glob("*")
         for file in filelist:
-            print(file)
-            print(blake2b(file))
+            # print(str(file))
+            # print(type(str(file)))
+            # print(blake2b(file))
+            results.append({"filename": str(file), "blake2b_checksum": blake2b(file)})
+        return results
+
+
+def write_csv(filename: str, results: list[dict]):
+    with open(filename, "w", newline="") as csvfile:
+        fieldnames = list(results[0].keys())
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(results)
 
 
 def main():
     directory = "/Users/cbunn/projects/checkr/data/"
-    checkfiles(directory)
+    results = checkfiles(directory)
+    print(results)
+    csvfile = "/Users/cbunn/projects/checkr/data/results.csv"
+    write_csv(csvfile, results)
 
     # start_md5 = timer()
     # file_hash = md5(filename=filename)
