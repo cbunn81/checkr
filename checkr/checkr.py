@@ -18,7 +18,8 @@ import typer
 # - TODO - Intermediate: Log errors to a file and stdout
 # - TODO - Intermediate: Display progress bar
 # - TODO - Intermediate: Allow for levels of verbosity in output
-# - TODO - Intermediate: Make hash algorithm a command argument
+# - DONE - Intermediate: Make hash algorithm a command argument
+# - TODO - Intermediate: Allow for a list of input directories
 # - TODO - Intermediate: Allow for a config file to set command arguments
 # - TODO - Advanced: Switch to SQLAlchemy ORM instead of CSV files
 # - TODO - Advanced: Test multithreading/multiprocessing
