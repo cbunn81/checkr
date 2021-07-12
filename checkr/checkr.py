@@ -139,22 +139,17 @@ def check_file_against_csv(
         )
 
 
-# TODO - optionally run as recursive
-@app.command()
-def scan(
-    input_path: str,
-    csvfilename: str = Path.cwd() / "results.csv",
-    algorithm: str = "blake2b",
-):
-    """Scan a directory, generate checksums for each file and store results in a CSV file.
+def get_filelist(path: str, recursive: bool = False) -> list[str]:
+    """Get a list of files (but not directories) from a path.
 
     Args:
-        input_path (str): The path containing files to be checked.
-        csvfilename (str, optional): The CSV file to hold the results. Defaults to "results.csv" within the current working directory. Will overwrite any existing file of the same name.
-        algorithm (str, optional): The checksum algorithm to use. Defaults to "blake2b".
+        path (str): The path to search for files.
+        recursive (bool, optional): Whether to recursively search the path. Defaults to False.
+
+    Returns:
+        list[str]: A list of all filenames, given as absolute paths.
     """
-    dir = Path(input_path)
-    results = []
+    dir = Path(path)
     if not dir.exists():
         print(f"The directory '{dir}' does not exist.")
         return
@@ -162,7 +157,40 @@ def scan(
         print(f"'{dir}' is not a directory.")
         return
     else:
-        filelist = dir.glob("*")
+        results = dir.rglob("*") if recursive else dir.glob("*")
+        filelist = [x for x in results if x.is_file()]
+        return filelist
+
+
+@app.command()
+def scan(
+    path: str = typer.Argument(..., help="The path containing files to be checked."),
+    csvfilename: str = typer.Option(
+        Path.cwd() / "results.csv",
+        help="The CSV file to hold the results. Defaults to 'results.csv' within the current working directory. Will overwrite any existing file of the same name.",
+    ),
+    algorithm: str = typer.Option("blake2b", help="The checksum algorithm to use."),
+    recursive: bool = typer.Option(
+        False,
+        "--recursive/--no-recursive",
+        "-r/-R",
+        help="Whether to scan directories recursively.",
+    ),
+):
+    """Scan a directory, generate checksums for each file and store results in a CSV file.
+
+    Args:
+        input_path (str): The path containing files to be checked.
+        csvfilename (str, optional): The CSV file to hold the results. Defaults to "results.csv" within the current working directory. Will overwrite any existing file of the same name.
+        algorithm (str, optional): The checksum algorithm to use. Defaults to "blake2b".
+        recursive (bool, optional): Whether to scan directories recursively. Defaults to False.
+    """
+    filelist = get_filelist(path=path, recursive=recursive)
+    results = []
+    if not filelist:
+        print(f"The directory '{path}' does not exist.")
+        return
+    else:
         for file in filelist:
             results.append(
                 {
@@ -175,29 +203,40 @@ def scan(
 
 
 @app.command()
-def check(csvfilename: str, path: str, algorithm: str = "blake2b"):
+def check(
+    path: str = typer.Argument(..., help="The path containing files to be checked."),
+    csvfilename: str = typer.Argument(
+        ..., help="The path containing files to be checked."
+    ),
+    algorithm: str = typer.Option("blake2b", help="The checksum algorithm to use."),
+    recursive: bool = typer.Option(
+        False,
+        "--recursive/--no-recursive",
+        "-r/-R",
+        help="Whether to scan directories recursively.",
+    ),
+):
     """Check a directory by comparing checksum results from a CSV file with newly generated checksums.
 
     Args:
         csvfilename (str): The CSV file containing checksum results for comparison.
         path (str): The path containing files to be checked.
         algorithm (str, optional): The checksum algorithm to use. Defaults to "blake2b".
+        recursive (bool, optional): Whether to scan directories recursively. Defaults to False.
     """
-    dir = Path(path)
+    filelist = get_filelist(path=path, recursive=recursive)
     num_good = 0
     num_bad = 0
     total = 0
-    if not dir.exists():
-        print(f"The directory '{dir}' does not exist.")
-        return
-    elif not dir.is_dir():
-        print(f"'{dir}' is not a directory.")
+    if not filelist:
+        print(f"The directory '{path}' does not exist.")
         return
     else:
-        filelist = dir.glob("*")
         for file in filelist:
             if check_file_against_csv(
-                csvfilename=csvfilename, checkfilename=str(file), algorithm=algorithm
+                csvfilename=csvfilename,
+                checkfilename=str(file.resolve()),
+                algorithm=algorithm,
             ):
                 print(f"File ({file}) passed the check.")
                 num_good += 1
