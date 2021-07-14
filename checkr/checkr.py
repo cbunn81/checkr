@@ -3,9 +3,11 @@ import hashlib
 from timeit import default_timer as timer
 from pathlib import Path
 import csv
+import time
 
 # third party imports
 import typer
+from rich.progress import track
 
 
 # To do list
@@ -191,7 +193,7 @@ def scan(
         print(f"The directory '{path}' does not exist.")
         return
     else:
-        for file in filelist:
+        for file in track(filelist, description="Scanning ..."):
             results.append(
                 {
                     "filename": str(file.resolve()),
@@ -232,7 +234,7 @@ def check(
         print(f"The directory '{path}' does not exist.")
         return
     else:
-        for file in filelist:
+        for file in track(filelist, description="Checking ..."):
             if check_file_against_csv(
                 csvfilename=csvfilename,
                 checkfilename=str(file.resolve()),
