@@ -198,7 +198,7 @@ def scan(
                 {
                     "filename": str(file.resolve()),
                     "algorithm": algorithm,
-                    "checksum": blake2b(file),
+                    "checksum": create_checksum(file, algorithm=algorithm),
                 }
             )
         write_csv(csvfilename=csvfilename, results=results)
