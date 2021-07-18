@@ -18,7 +18,7 @@ from rich.progress import track
 # - DONE - Intermediate: Make input directory a command argument
 # - DONE - Intermediate: Make output file a command argument
 # - TODO - Intermediate: Log errors to a file and stdout
-# - TODO - Intermediate: Display progress bar
+# - DONE - Intermediate: Display progress bar
 # - TODO - Intermediate: Allow for levels of verbosity in output
 # - DONE - Intermediate: Make hash algorithm a command argument
 # - TODO - Intermediate: Allow for a list of input directories
@@ -179,13 +179,8 @@ def scan(
         help="Whether to scan directories recursively.",
     ),
 ):
-    """Scan a directory, generate checksums for each file and store results in a CSV file.
-
-    Args:
-        input_path (str): The path containing files to be checked.
-        csvfilename (str, optional): The CSV file to hold the results. Defaults to "results.csv" within the current working directory. Will overwrite any existing file of the same name.
-        algorithm (str, optional): The checksum algorithm to use. Defaults to "blake2b".
-        recursive (bool, optional): Whether to scan directories recursively. Defaults to False.
+    """
+    Scan a directory, generate checksums for each file and store results in a CSV file.
     """
     filelist = get_filelist(path=path, recursive=recursive)
     results = []
@@ -218,13 +213,8 @@ def check(
         help="Whether to scan directories recursively.",
     ),
 ):
-    """Check a directory by comparing checksum results from a CSV file with newly generated checksums.
-
-    Args:
-        csvfilename (str): The CSV file containing checksum results for comparison.
-        path (str): The path containing files to be checked.
-        algorithm (str, optional): The checksum algorithm to use. Defaults to "blake2b".
-        recursive (bool, optional): Whether to scan directories recursively. Defaults to False.
+    """
+    Check a directory by comparing checksum results from a CSV file with newly generated checksums.
     """
     filelist = get_filelist(path=path, recursive=recursive)
     num_good = 0
