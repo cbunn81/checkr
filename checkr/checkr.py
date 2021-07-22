@@ -5,6 +5,7 @@ import csv
 import logging
 
 # third party imports
+import yaml
 import typer
 from rich.progress import track
 
@@ -21,8 +22,12 @@ from rich.progress import track
 # - DONE - Intermediate: Allow for levels of verbosity in output
 # - DONE - Intermediate: Make hash algorithm a command argument
 # - DONE - Intermediate: Allow for a list of input directories
-# - TODO - Intermediate: Allow for a config file to set command arguments
+# - Done - Intermediate: Allow for a config file to set command arguments
+# - TODO - Intermediate: Allow for command line arguments to override config file
+# - TODO - Intermediate: Use RichHandler to solve progress bar redirection issue
+# - TODO - Intermediate: Rotate log files
 # - TODO - Advanced: Switch to SQLAlchemy ORM instead of CSV files
+#           - OR have both as options?
 # - TODO - Advanced: Test multithreading/multiprocessing
 
 app = typer.Typer(help="File Integrity Checker")
@@ -202,11 +207,12 @@ def get_filelist(paths: list[str], recursive: bool = False) -> list[str]:
 
 @app.command()
 def scan(
-    paths: list[str] = typer.Argument(
-        ..., help="The paths containing files to be checked. Can be multiple."
+    paths: list[str] = typer.Option(
+        [Path.cwd()],
+        help="The paths containing files to be checked. Can be multiple.",
     ),
     csvfilename: str = typer.Option(
-        Path.cwd() / "results.csv",
+        Path.home() / ".checkr/results.csv",
         help="The CSV file to hold the results. Defaults to 'results.csv' within the current working directory. Will overwrite any existing file of the same name.",
     ),
     algorithm: str = typer.Option("blake2b", help="The checksum algorithm to use."),
@@ -226,10 +232,28 @@ def scan(
         clamp=True,
         help="The verbosity level. Once for INFO and twice for DEBUG.",
     ),
+    configfile: str = typer.Option(
+        Path.home() / ".checkr/config.yml",
+        "--config",
+        "-c",
+        help="A YAML config file holding values for all above options and arguments. Entries in config file override command line arguments.",
+    ),
 ):
     """
-    Scan a directory, generate checksums for each file and store results in a CSV file.
+    Scan a directory or directories, generate checksums for each file and store results in a CSV file.
     """
+    try:
+        # Read config file and set variables, using command line versions as fallbacks
+        with open(Path(configfile).resolve()) as cf_file:
+            config = yaml.safe_load(cf_file.read())
+        paths = config.get("paths", paths)
+        csvfilename = config.get("csvfilename", csvfilename)
+        algorithm = config.get("algorithm", algorithm)
+        recursive = config.get("recursive", recursive)
+        verbose = config.get("verbose", verbose)
+    except FileNotFoundError:
+        print("No config file found.")
+
     if verbose == 0:
         loglevel = "ERROR"
     elif verbose == 1:
@@ -237,6 +261,7 @@ def scan(
     else:
         loglevel = "DEBUG"
     logger = start_logging(console_level=loglevel)
+
     results = []
     filelist = get_filelist(paths=paths, recursive=recursive)
     if filelist:
@@ -255,11 +280,13 @@ def scan(
 
 @app.command()
 def check(
-    paths: list[str] = typer.Argument(
-        ..., help="The paths containing files to be checked. Can be multiple."
+    paths: list[str] = typer.Option(
+        [Path.cwd()],
+        help="The paths containing files to be checked. Can be multiple.",
     ),
-    csvfilename: str = typer.Argument(
-        ..., help="The CSV file holding results of a previous scan to check against."
+    csvfilename: str = typer.Option(
+        Path.home() / ".checkr/results.csv",
+        help="The CSV file holding results of a previous scan to check against.",
     ),
     algorithm: str = typer.Option("blake2b", help="The checksum algorithm to use."),
     recursive: bool = typer.Option(
@@ -278,10 +305,28 @@ def check(
         clamp=True,
         help="The verbosity level. Once for INFO and twice for DEBUG.",
     ),
+    configfile: str = typer.Option(
+        Path.home() / ".checkr/config.yml",
+        "--config",
+        "-c",
+        help="A YAML config file holding values for all above options and arguments. Entries in config file override command line arguments.",
+    ),
 ):
     """
-    Check a directory by comparing checksum results from a CSV file with newly generated checksums.
+    Check a directory or directories by comparing checksum results from a CSV file with newly generated checksums.
     """
+    try:
+        # Read config file and set variables, using command line versions as fallbacks
+        with open(Path(configfile).resolve()) as cf_file:
+            config = yaml.safe_load(cf_file.read())
+        paths = config.get("paths", paths)
+        csvfilename = config.get("csvfilename", csvfilename)
+        algorithm = config.get("algorithm", algorithm)
+        recursive = config.get("recursive", recursive)
+        verbose = config.get("verbose", verbose)
+    except FileNotFoundError:
+        print("No config file found.")
+
     if verbose == 0:
         loglevel = "ERROR"
     elif verbose == 1:
@@ -289,6 +334,7 @@ def check(
     else:
         loglevel = "DEBUG"
     logger = start_logging(console_level=loglevel)
+
     filelist = get_filelist(paths=paths, recursive=recursive)
     num_good = 0
     num_bad = 0
