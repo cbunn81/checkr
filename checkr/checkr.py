@@ -26,7 +26,9 @@ from rich.progress import track
 # - DONE - Intermediate: Allow for a list of input directories
 # - Done - Intermediate: Allow for a config file to set command arguments
 # - TODO - Intermediate: Allow for command line arguments to override config file
-# - TODO - Intermediate: Use RichHandler to solve progress bar redirection issue
+#           - won't work easily with default values for options in command definition
+#           - consider removing default values and having default config file instead
+# - DONE - Intermediate: Use RichHandler to solve progress bar redirection issue
 # - TODO - Intermediate: Rotate log files
 # - TODO - Advanced: Switch to SQLAlchemy ORM instead of CSV files
 #           - OR have both as options?
