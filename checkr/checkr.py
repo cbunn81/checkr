@@ -259,7 +259,7 @@ def check(
         ..., help="The paths containing files to be checked. Can be multiple."
     ),
     csvfilename: str = typer.Argument(
-        ..., help="The path containing files to be checked."
+        ..., help="The CSV file holding results of a previous scan to check against."
     ),
     algorithm: str = typer.Option("blake2b", help="The checksum algorithm to use."),
     recursive: bool = typer.Option(
