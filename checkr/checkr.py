@@ -7,6 +7,8 @@ import logging
 # third party imports
 import yaml
 import typer
+from rich.console import Console
+from rich.logging import RichHandler
 from rich.progress import track
 
 
@@ -34,6 +36,7 @@ app = typer.Typer(help="File Integrity Checker")
 
 
 def start_logging(
+    console: object,
     file_level: str = "DEBUG",
     console_level: str = "ERROR",
     filename: str = Path.cwd() / "checkr.log",
@@ -54,11 +57,11 @@ def start_logging(
     logger = logging.getLogger("checkr")
     # set a default log level threshold
     logger.setLevel(logging.DEBUG)
-    # create file handler which logs even debug messages
+    # create file handler
     fh = logging.FileHandler(filename=filename)
     fh.setLevel(level=fh_loglevel)
-    # create console handler with a higher log level
-    ch = logging.StreamHandler()
+    # create console handler using RichHandler so progress bar is redirected
+    ch = RichHandler(console=console)
     ch.setLevel(level=ch_loglevel)
     fh.setFormatter(
         logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -267,12 +270,14 @@ def scan(
         loglevel = "INFO"
     else:
         loglevel = "DEBUG"
-    logger = start_logging(console_level=loglevel, filename=logfile)
+    # set a Rich console to use for both logging and progress bar output
+    console = Console(stderr=True)
+    logger = start_logging(console_level=loglevel, filename=logfile, console=console)
 
     results = []
     filelist = get_filelist(paths=paths, recursive=recursive)
     if filelist:
-        for file in track(filelist, description="Scanning ..."):
+        for file in track(filelist, console=console, description="Scanning ..."):
             logger.info(f"Scanning {file.resolve()}")
             results.append(
                 {
@@ -347,14 +352,16 @@ def check(
         loglevel = "INFO"
     else:
         loglevel = "DEBUG"
-    logger = start_logging(console_level=loglevel, filename=logfile)
+    # set a Rich console to use for both logging and progress bar output
+    console = Console(stderr=True)
+    logger = start_logging(console_level=loglevel, filename=logfile, console=console)
 
     filelist = get_filelist(paths=paths, recursive=recursive)
     num_good = 0
     num_bad = 0
     total = 0
     if filelist:
-        for file in track(filelist, description="Checking ..."):
+        for file in track(filelist, console=console, description="Checking ..."):
             logger.info(f"Checking {file.resolve()}")
             if check_file_against_csv(
                 csvfilename=csvfilename,
