@@ -4,6 +4,7 @@ from timeit import default_timer as timer
 from pathlib import Path
 import csv
 import time
+import logging
 
 # third party imports
 import typer
@@ -27,6 +28,43 @@ from rich.progress import track
 # - TODO - Advanced: Test multithreading/multiprocessing
 
 app = typer.Typer(help="File Integrity Checker")
+
+
+def start_logging(
+    file_level: str = "DEBUG",
+    console_level: str = "ERROR",
+    filename: str = Path.cwd() / "checkr.log",
+) -> object:
+    """Create a logger and initialize both logging to a file and to the console.
+
+    Args:
+        file_level (str): Logging level for the file handler
+        console_level (str): Logging level for the console handler
+        filename (str): Filename to store the file handler log output
+    """
+    fh_loglevel = getattr(logging, file_level.upper(), None)
+    if not isinstance(fh_loglevel, int):
+        raise ValueError(f"Invalid log level: {file_level}")
+    ch_loglevel = getattr(logging, console_level.upper(), None)
+    if not isinstance(ch_loglevel, int):
+        raise ValueError(f"Invalid log level: {console_level}")
+    logger = logging.getLogger("checkr")
+    # set a default log level threshold
+    logger.setLevel(logging.DEBUG)
+    # create file handler which logs even debug messages
+    fh = logging.FileHandler(filename=filename)
+    fh.setLevel(level=fh_loglevel)
+    # create console handler with a higher log level
+    ch = logging.StreamHandler()
+    ch.setLevel(level=ch_loglevel)
+    fh.setFormatter(
+        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    )
+    ch.setFormatter(logging.Formatter("%(levelname)s - %(message)s"))
+    # add the handlers to logger
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+    return logger
 
 
 def md5(filename: str) -> str:
@@ -124,19 +162,18 @@ def check_file_against_csv(
     Returns:
         bool: True if the checksums match, otherwise False.
     """
+    logger = logging.getLogger("checkr")
     stored_checksum = get_stored_checksum_from_csv(
         csvfilename=csvfilename, checkfilename=checkfilename, algorithm=algorithm
     )
     if stored_checksum is not None:
         new_checksum = create_checksum(filename=checkfilename, algorithm=algorithm)
         if stored_checksum == new_checksum:
-            print("Checksums match! Yay!")
             return True
         else:
-            print("Checksums DON'T match. Oh no!")
             return False
     else:
-        print(
+        logger.warning(
             f"No checksum exists for file ({checkfilename}) in CSV file ({csvfilename})."
         )
 
@@ -151,12 +188,13 @@ def get_filelist(path: str, recursive: bool = False) -> list[str]:
     Returns:
         list[str]: A list of all filenames, given as absolute paths.
     """
+    logger = logging.getLogger("checkr")
     dir = Path(path)
     if not dir.exists():
-        print(f"The directory '{dir}' does not exist.")
+        logger.error(f"The directory '{dir}' does not exist.")
         return
     elif not dir.is_dir():
-        print(f"'{dir}' is not a directory.")
+        logger.error(f"'{dir}' is not a directory.")
         return
     else:
         results = dir.rglob("*") if recursive else dir.glob("*")
@@ -178,17 +216,33 @@ def scan(
         "-r/-R",
         help="Whether to scan directories recursively.",
     ),
+    verbose: int = typer.Option(
+        0,
+        "--verbose",
+        "-v",
+        count=True,
+        min=0,
+        max=2,
+        clamp=True,
+        help="The verbosity level. Once for INFO and twice for DEBUG.",
+    ),
 ):
     """
     Scan a directory, generate checksums for each file and store results in a CSV file.
     """
+    if verbose == 0:
+        loglevel = "ERROR"
+    elif verbose == 1:
+        loglevel = "INFO"
+    else:
+        loglevel = "DEBUG"
+    logger = start_logging(console_level=loglevel)
     filelist = get_filelist(path=path, recursive=recursive)
     results = []
-    if not filelist:
-        print(f"The directory '{path}' does not exist.")
-        return
-    else:
+    if filelist:
+        logger.info(f"Starting scan of {path}")
         for file in track(filelist, description="Scanning ..."):
+            logger.info(f"Scanning {file.resolve()}")
             results.append(
                 {
                     "filename": str(file.resolve()),
@@ -197,6 +251,7 @@ def scan(
                 }
             )
         write_csv(csvfilename=csvfilename, results=results)
+        logger.info("Scan complete.")
 
 
 @app.command()
@@ -212,33 +267,49 @@ def check(
         "-r/-R",
         help="Whether to scan directories recursively.",
     ),
+    verbose: int = typer.Option(
+        0,
+        "--verbose",
+        "-v",
+        count=True,
+        min=0,
+        max=2,
+        clamp=True,
+        help="The verbosity level. Once for INFO and twice for DEBUG.",
+    ),
 ):
     """
     Check a directory by comparing checksum results from a CSV file with newly generated checksums.
     """
+    if verbose == 0:
+        loglevel = "ERROR"
+    elif verbose == 1:
+        loglevel = "INFO"
+    else:
+        loglevel = "DEBUG"
+    logger = start_logging(console_level=loglevel)
     filelist = get_filelist(path=path, recursive=recursive)
     num_good = 0
     num_bad = 0
     total = 0
-    if not filelist:
-        print(f"The directory '{path}' does not exist.")
-        return
-    else:
+    if filelist:
+        logger.info(f"Starting check of {path}")
         for file in track(filelist, description="Checking ..."):
+            logger.info(f"Checking {file.resolve()}")
             if check_file_against_csv(
                 csvfilename=csvfilename,
                 checkfilename=str(file.resolve()),
                 algorithm=algorithm,
             ):
-                print(f"File ({file}) passed the check.")
+                logger.info(f"File ({file.resolve()}) passed the check.")
                 num_good += 1
             else:
-                print(f"File ({file}) FAILED the check.")
+                logger.warning(f"File ({file.resolve()}) FAILED the check.")
                 num_bad += 1
             total += 1
-        print(
-            f"Check completed. {num_bad} files failed out of {total} total files checked."
-        )
+        end_message = f"Check completed. {num_bad} files failed out of {total} total files checked."
+        print(end_message)
+        logger.info(end_message)
 
 
 def main():
