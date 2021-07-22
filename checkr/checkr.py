@@ -238,6 +238,12 @@ def scan(
         "-c",
         help="A YAML config file holding values for all above options and arguments. Entries in config file override command line arguments.",
     ),
+    logfile: str = typer.Option(
+        Path.home() / ".checkr/checkr.log",
+        "--log",
+        "-l",
+        help="A file to use as a log of operations.",
+    ),
 ):
     """
     Scan a directory or directories, generate checksums for each file and store results in a CSV file.
@@ -251,6 +257,7 @@ def scan(
         algorithm = config.get("algorithm", algorithm)
         recursive = config.get("recursive", recursive)
         verbose = config.get("verbose", verbose)
+        logfile = config.get("logfile", logfile)
     except FileNotFoundError:
         print("No config file found.")
 
@@ -260,7 +267,7 @@ def scan(
         loglevel = "INFO"
     else:
         loglevel = "DEBUG"
-    logger = start_logging(console_level=loglevel)
+    logger = start_logging(console_level=loglevel, filename=logfile)
 
     results = []
     filelist = get_filelist(paths=paths, recursive=recursive)
@@ -311,6 +318,12 @@ def check(
         "-c",
         help="A YAML config file holding values for all above options and arguments. Entries in config file override command line arguments.",
     ),
+    logfile: str = typer.Option(
+        Path.home() / ".checkr/checkr.log",
+        "--log",
+        "-l",
+        help="A file to use as a log of operations.",
+    ),
 ):
     """
     Check a directory or directories by comparing checksum results from a CSV file with newly generated checksums.
@@ -324,6 +337,7 @@ def check(
         algorithm = config.get("algorithm", algorithm)
         recursive = config.get("recursive", recursive)
         verbose = config.get("verbose", verbose)
+        logfile = config.get("logfile", logfile)
     except FileNotFoundError:
         print("No config file found.")
 
@@ -333,7 +347,7 @@ def check(
         loglevel = "INFO"
     else:
         loglevel = "DEBUG"
-    logger = start_logging(console_level=loglevel)
+    logger = start_logging(console_level=loglevel, filename=logfile)
 
     filelist = get_filelist(paths=paths, recursive=recursive)
     num_good = 0
