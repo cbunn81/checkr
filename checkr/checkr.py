@@ -1,9 +1,7 @@
 # standard library imports
 import hashlib
-from timeit import default_timer as timer
 from pathlib import Path
 import csv
-import time
 import logging
 
 # third party imports
@@ -18,11 +16,11 @@ from rich.progress import track
 # - DONE - Intermediate: Integrate Typer
 # - DONE - Intermediate: Make input directory a command argument
 # - DONE - Intermediate: Make output file a command argument
-# - TODO - Intermediate: Log errors to a file and stdout
+# - DONE - Intermediate: Log errors to a file and stdout
 # - DONE - Intermediate: Display progress bar
-# - TODO - Intermediate: Allow for levels of verbosity in output
+# - DONE - Intermediate: Allow for levels of verbosity in output
 # - DONE - Intermediate: Make hash algorithm a command argument
-# - TODO - Intermediate: Allow for a list of input directories
+# - DONE - Intermediate: Allow for a list of input directories
 # - TODO - Intermediate: Allow for a config file to set command arguments
 # - TODO - Advanced: Switch to SQLAlchemy ORM instead of CSV files
 # - TODO - Advanced: Test multithreading/multiprocessing
@@ -178,33 +176,35 @@ def check_file_against_csv(
         )
 
 
-def get_filelist(path: str, recursive: bool = False) -> list[str]:
+def get_filelist(paths: list[str], recursive: bool = False) -> list[str]:
     """Get a list of files (but not directories) from a path.
 
     Args:
-        path (str): The path to search for files.
+        paths (list[str]): The path(s) to search for files.
         recursive (bool, optional): Whether to recursively search the path. Defaults to False.
 
     Returns:
         list[str]: A list of all filenames, given as absolute paths.
     """
     logger = logging.getLogger("checkr")
-    dir = Path(path)
-    if not dir.exists():
-        logger.error(f"The directory '{dir}' does not exist.")
-        return
-    elif not dir.is_dir():
-        logger.error(f"'{dir}' is not a directory.")
-        return
-    else:
-        results = dir.rglob("*") if recursive else dir.glob("*")
-        filelist = [x for x in results if x.is_file()]
-        return filelist
+    filelist = []
+    for path in paths:
+        dir = Path(path)
+        if not dir.exists():
+            logger.error(f"The directory '{dir}' does not exist.")
+        elif not dir.is_dir():
+            logger.error(f"'{dir}' is not a directory.")
+        else:
+            results = dir.rglob("*") if recursive else dir.glob("*")
+            filelist.extend([x for x in results if x.is_file()])
+    return filelist
 
 
 @app.command()
 def scan(
-    path: str = typer.Argument(..., help="The path containing files to be checked."),
+    paths: list[str] = typer.Argument(
+        ..., help="The paths containing files to be checked. Can be multiple."
+    ),
     csvfilename: str = typer.Option(
         Path.cwd() / "results.csv",
         help="The CSV file to hold the results. Defaults to 'results.csv' within the current working directory. Will overwrite any existing file of the same name.",
@@ -237,10 +237,9 @@ def scan(
     else:
         loglevel = "DEBUG"
     logger = start_logging(console_level=loglevel)
-    filelist = get_filelist(path=path, recursive=recursive)
     results = []
+    filelist = get_filelist(paths=paths, recursive=recursive)
     if filelist:
-        logger.info(f"Starting scan of {path}")
         for file in track(filelist, description="Scanning ..."):
             logger.info(f"Scanning {file.resolve()}")
             results.append(
@@ -250,13 +249,15 @@ def scan(
                     "checksum": create_checksum(file, algorithm=algorithm),
                 }
             )
-        write_csv(csvfilename=csvfilename, results=results)
-        logger.info("Scan complete.")
+    write_csv(csvfilename=csvfilename, results=results)
+    logger.info("Scan complete.")
 
 
 @app.command()
 def check(
-    path: str = typer.Argument(..., help="The path containing files to be checked."),
+    paths: list[str] = typer.Argument(
+        ..., help="The paths containing files to be checked. Can be multiple."
+    ),
     csvfilename: str = typer.Argument(
         ..., help="The path containing files to be checked."
     ),
@@ -288,12 +289,11 @@ def check(
     else:
         loglevel = "DEBUG"
     logger = start_logging(console_level=loglevel)
-    filelist = get_filelist(path=path, recursive=recursive)
+    filelist = get_filelist(paths=paths, recursive=recursive)
     num_good = 0
     num_bad = 0
     total = 0
     if filelist:
-        logger.info(f"Starting check of {path}")
         for file in track(filelist, description="Checking ..."):
             logger.info(f"Checking {file.resolve()}")
             if check_file_against_csv(
