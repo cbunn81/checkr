@@ -1,0 +1,10 @@
+---
+paths:
+  - /path/to/data1
+  - /path/to/data2
+  - /path/to/data3
+csvfile: /path/to/results.csv
+logfile: /path/to/checkr.log
+algorithm: blake2b
+recursive: True
+verbose: 0
