@@ -123,14 +123,14 @@ def create_checksum(filename: str, algorithm: str = "blake2b") -> str:
         return md5(filename)
 
 
-def write_csv(csvfilename: str, results: list[dict]):
+def write_csv(csvfile: str, results: list[dict]):
     """Create a CSV file and write the checksum results to it.
 
     Args:
-        csvfilename (str): The file to create.
+        csvfile (str): The file to create.
         results (list[dict]): A list of results to write to the CSV file. Each result is a dictionary with keys: filename, algorithm, checksum.
     """
-    with open(csvfilename, "w", newline="") as csvfile:
+    with open(csvfile, "w", newline="") as csvfile:
         fieldnames = list(results[0].keys())
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
@@ -138,19 +138,19 @@ def write_csv(csvfilename: str, results: list[dict]):
 
 
 def get_stored_checksum_from_csv(
-    csvfilename: str, checkfilename: str, algorithm: str = "blake2b"
+    csvfile: str, checkfilename: str, algorithm: str = "blake2b"
 ) -> str:
     """Retrieve a stored checksum digest from a CSV file of previous results.
 
     Args:
-        csvfilename (str): A CSV file containing checksum results.
+        csvfile (str): A CSV file containing checksum results.
         checkfilename (str): The file to check against the CSV file results.
         algorithm (str, optional): The checksum algorithm to use. Defaults to "blake2b".
 
     Returns:
         str: The checksum digest stored in the CSV file, if any.
     """
-    with open(csvfilename, newline="") as csvfile:
+    with open(csvfile, newline="") as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
             if row["filename"] == checkfilename and row["algorithm"] == algorithm:
@@ -158,12 +158,12 @@ def get_stored_checksum_from_csv(
 
 
 def check_file_against_csv(
-    csvfilename: str, checkfilename: str, algorithm: str = "blake2b"
+    csvfile: str, checkfilename: str, algorithm: str = "blake2b"
 ) -> bool:
     """Compare a previously generated checksum from a CSV file with a newly generated one.
 
     Args:
-        csvfilename (str): The CSV file containing the previously generated checksum.
+        csvfile (str): The CSV file containing the previously generated checksum.
         checkfilename (str): The file to check.
         algorithm (str, optional): The checksum algorithm to use. Defaults to "blake2b".
 
@@ -172,7 +172,7 @@ def check_file_against_csv(
     """
     logger = logging.getLogger("checkr")
     stored_checksum = get_stored_checksum_from_csv(
-        csvfilename=csvfilename, checkfilename=checkfilename, algorithm=algorithm
+        csvfile=csvfile, checkfilename=checkfilename, algorithm=algorithm
     )
     if stored_checksum is not None:
         new_checksum = create_checksum(filename=checkfilename, algorithm=algorithm)
@@ -182,7 +182,7 @@ def check_file_against_csv(
             return False
     else:
         logger.warning(
-            f"No checksum exists for file ({checkfilename}) in CSV file ({csvfilename})."
+            f"No checksum exists for file ({checkfilename}) in CSV file ({csvfile})."
         )
 
 
@@ -216,7 +216,7 @@ def scan(
         [Path.cwd()],
         help="The paths containing files to be checked. Can be multiple.",
     ),
-    csvfilename: str = typer.Option(
+    csvfile: str = typer.Option(
         Path.home() / ".checkr/results.csv",
         help="The CSV file to hold the results. Defaults to 'results.csv' within the current working directory. Will overwrite any existing file of the same name.",
     ),
@@ -258,7 +258,7 @@ def scan(
         with open(Path(configfile).resolve()) as cf_file:
             config = yaml.safe_load(cf_file.read())
         paths = config.get("paths", paths)
-        csvfilename = config.get("csvfilename", csvfilename)
+        csvfile = config.get("csvfile", csvfile)
         algorithm = config.get("algorithm", algorithm)
         recursive = config.get("recursive", recursive)
         verbose = config.get("verbose", verbose)
@@ -288,7 +288,7 @@ def scan(
                     "checksum": create_checksum(file, algorithm=algorithm),
                 }
             )
-    write_csv(csvfilename=csvfilename, results=results)
+    write_csv(csvfile=csvfile, results=results)
     logger.info("Scan complete.")
 
 
@@ -298,7 +298,7 @@ def check(
         [Path.cwd()],
         help="The paths containing files to be checked. Can be multiple.",
     ),
-    csvfilename: str = typer.Option(
+    csvfile: str = typer.Option(
         Path.home() / ".checkr/results.csv",
         help="The CSV file holding results of a previous scan to check against.",
     ),
@@ -340,7 +340,7 @@ def check(
         with open(Path(configfile).resolve()) as cf_file:
             config = yaml.safe_load(cf_file.read())
         paths = config.get("paths", paths)
-        csvfilename = config.get("csvfilename", csvfilename)
+        csvfile = config.get("csvfile", csvfile)
         algorithm = config.get("algorithm", algorithm)
         recursive = config.get("recursive", recursive)
         verbose = config.get("verbose", verbose)
@@ -366,7 +366,7 @@ def check(
         for file in track(filelist, console=console, description="Checking ..."):
             logger.info(f"Checking {file.resolve()}")
             if check_file_against_csv(
-                csvfilename=csvfilename,
+                csvfile=csvfile,
                 checkfilename=str(file.resolve()),
                 algorithm=algorithm,
             ):
@@ -387,7 +387,7 @@ def main():
     print(results)
     csvfile = "/Users/cbunn/projects/checkr/results.csv"
     write_csv(csvfile, results)
-    check(csvfilename=csvfile, path=directory)
+    check(csvfile=csvfile, path=directory)
 
 
 if __name__ == "__main__":
