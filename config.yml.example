@@ -1,11 +1,34 @@
 ---
 # The default location to store this file is ~/.checkr/config.yml
+
+# The values within this file will override the default settings as
+#  well as any arguments or options set on the command line. So if
+#  you don't wish to override them with this file, remove the
+#  corresponding line completely or comment it out.
+
+# Set paths as a list of one or more paths you wish to scan/check
 paths:
   - /path/to/data1
   - /path/to/data2
   - /path/to/data3
+
+# The CSV file to hold the results. Defaults to '~/.checkr/results.csv'.
+# When scanning, any existing file of the same name is overwritten.
 csvfile: /path/to/results.csv
+
+# A file to log operations. Defaults to '~/.checkr/checkr.log'. It logs
+#  at DEBUG level and appends messages instead of overwriting.
 logfile: /path/to/checkr.log
+
+# For the checksum algorithm, you can choose either 'blake2b' or 'md5'.
+# blake2b is recommended as it is more cryptographically secure and faster.
 algorithm: blake2b
+
+# By default, the scanning and checking functions do not recurse into
+#  subdirectories. Set this to 'True' to recurse.
 recursive: True
+
+# Setting the verbosity to 0 means only ERROR-level messages will print.
+# Setting it to 1 means only INFO-level and above messages will print.
+# Setting it to 2 means only DEBUG-level and above messages will print.
 verbose: 0
