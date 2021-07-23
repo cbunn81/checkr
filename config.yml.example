@@ -1,4 +1,5 @@
 ---
+# The default location to store this file is ~/.checkr/config.yml
 paths:
   - /path/to/data1
   - /path/to/data2
