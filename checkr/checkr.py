@@ -60,7 +60,9 @@ def start_logging(
     # set a default log level threshold
     logger.setLevel(logging.DEBUG)
     # create file handler
-    fh = logging.FileHandler(filename=filename)
+    filepath = Path(filename).resolve()
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    fh = logging.FileHandler(filename=filepath)
     fh.setLevel(level=fh_loglevel)
     # create console handler using RichHandler so progress bar is redirected
     ch = RichHandler(console=console)
