@@ -223,7 +223,7 @@ def scan(
     ),
     csvfile: str = typer.Option(
         Path.home() / ".checkr/results.csv",
-        help="The CSV file to hold the results. Defaults to 'results.csv' within the current working directory. Will overwrite any existing file of the same name.",
+        help="The CSV file to hold the results. Defaults to '~/.checkr/results.csv'. When scanning, any existing file of the same name is overwritten.",
     ),
     algorithm: str = typer.Option("blake2b", help="The checksum algorithm to use."),
     recursive: bool = typer.Option(
@@ -305,7 +305,7 @@ def check(
     ),
     csvfile: str = typer.Option(
         Path.home() / ".checkr/results.csv",
-        help="The CSV file holding results of a previous scan to check against.",
+        help="The CSV file holding results of a previous scan to check against. Defaults to '~/.checkr/results.csv'.",
     ),
     algorithm: str = typer.Option("blake2b", help="The checksum algorithm to use."),
     recursive: bool = typer.Option(
