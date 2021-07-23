@@ -123,14 +123,16 @@ def create_checksum(filename: str, algorithm: str = "blake2b") -> str:
         return md5(filename)
 
 
-def write_csv(csvfile: str, results: list[dict]):
+def write_csv(filename: str, results: list[dict]):
     """Create a CSV file and write the checksum results to it.
 
     Args:
-        csvfile (str): The file to create.
+        filename (str): The file to create.
         results (list[dict]): A list of results to write to the CSV file. Each result is a dictionary with keys: filename, algorithm, checksum.
     """
-    with open(csvfile, "w", newline="") as csvfile:
+    filepath = Path(filename).resolve()
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    with open(filepath, "w", newline="") as csvfile:
         fieldnames = list(results[0].keys())
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
@@ -138,19 +140,20 @@ def write_csv(csvfile: str, results: list[dict]):
 
 
 def get_stored_checksum_from_csv(
-    csvfile: str, checkfilename: str, algorithm: str = "blake2b"
+    csvfilename: str, checkfilename: str, algorithm: str = "blake2b"
 ) -> str:
     """Retrieve a stored checksum digest from a CSV file of previous results.
 
     Args:
-        csvfile (str): A CSV file containing checksum results.
+        csvfilename (str): A CSV file containing checksum results.
         checkfilename (str): The file to check against the CSV file results.
         algorithm (str, optional): The checksum algorithm to use. Defaults to "blake2b".
 
     Returns:
         str: The checksum digest stored in the CSV file, if any.
     """
-    with open(csvfile, newline="") as csvfile:
+    filepath = Path(csvfilename).resolve()
+    with open(filepath, newline="") as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
             if row["filename"] == checkfilename and row["algorithm"] == algorithm:
@@ -172,7 +175,7 @@ def check_file_against_csv(
     """
     logger = logging.getLogger("checkr")
     stored_checksum = get_stored_checksum_from_csv(
-        csvfile=csvfile, checkfilename=checkfilename, algorithm=algorithm
+        csvfilename=csvfile, checkfilename=checkfilename, algorithm=algorithm
     )
     if stored_checksum is not None:
         new_checksum = create_checksum(filename=checkfilename, algorithm=algorithm)
@@ -288,7 +291,7 @@ def scan(
                     "checksum": create_checksum(file, algorithm=algorithm),
                 }
             )
-    write_csv(csvfile=csvfile, results=results)
+    write_csv(filename=csvfile, results=results)
     logger.info("Scan complete.")
 
 
