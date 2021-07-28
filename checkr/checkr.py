@@ -3,6 +3,7 @@ import hashlib
 from pathlib import Path
 import csv
 import logging
+import logging.handlers
 
 # third party imports
 import yaml
@@ -29,7 +30,7 @@ from rich.progress import track
 #           - won't work easily with default values for options in command definition
 #           - consider removing default values and having default config file instead
 # - DONE - Intermediate: Use RichHandler to solve progress bar redirection issue
-# - TODO - Intermediate: Rotate log files
+# - DONE - Intermediate: Rotate log files
 # - TODO - Advanced: Switch to SQLAlchemy ORM instead of CSV files
 #           - OR have both as options?
 # - TODO - Advanced: Test multithreading/multiprocessing
@@ -62,7 +63,9 @@ def start_logging(
     # create file handler
     filepath = Path(filename).resolve()
     filepath.parent.mkdir(parents=True, exist_ok=True)
-    fh = logging.FileHandler(filename=filepath)
+    fh = logging.handlers.RotatingFileHandler(
+        filename=filepath, maxBytes=1_048_576, backupCount=5
+    )
     fh.setLevel(level=fh_loglevel)
     # create console handler using RichHandler so progress bar is redirected
     ch = RichHandler(console=console)
