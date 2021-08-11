@@ -144,6 +144,33 @@ def write_csv(filename: str, results: list[dict]):
         writer.writerows(results)
 
 
+def store_result_in_csv(
+    csvfilename: str, checkfilename: str, checksum: str, algorithm: str = "blake2b"
+) -> None:
+    """Store a checksum result in a given csvfile, creating the file if needed.
+
+    Args:
+        csvfilename (str): The CSV file to use or create.
+        checkfilename (str): The file that was checked.
+        checksum (str): The checksum result for the file.
+        algorithm (str, optional): The checksum algorithm used. Defaults to "blake2b".
+    """
+    logger = logging.getLogger("checkr")
+    csvfilepath = Path(csvfilename).resolve()
+    csvfilepath.parent.mkdir(parents=True, exist_ok=True)
+    checkfilepath = Path(checkfilename).resolve()
+    with open(csvfilepath, "a", newline="") as csvfile:
+        fieldnames = ["filename", "algorithm", "checksum"]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        # write the header if this is a new file to be created
+        if not csvfilepath.is_file():
+            writer.writeheader()
+            logger.info(f"File {csvfilename} doesn't exist. Creating.")
+        writer.writerow(
+            {"filename": checkfilepath, "algorithm": algorithm, "checksum": checksum}
+        )
+
+
 def get_stored_checksum_from_csv(
     csvfilename: str, checkfilename: str, algorithm: str = "blake2b"
 ) -> str:
@@ -284,19 +311,29 @@ def scan(
     console = Console(stderr=True)
     logger = start_logging(console_level=loglevel, filename=logfile, console=console)
 
-    results = []
+    csvfilepath = Path(csvfile).resolve()
     filelist = get_filelist(paths=paths, recursive=recursive)
     if filelist:
         for file in track(filelist, console=console, description="Scanning ..."):
             logger.info(f"Scanning {file.resolve()}")
-            results.append(
-                {
-                    "filename": str(file.resolve()),
-                    "algorithm": algorithm,
-                    "checksum": create_checksum(file, algorithm=algorithm),
-                }
+            store_result_in_csv(
+                csvfilename=csvfilepath,
+                checkfilename=file.resolve(),
+                checksum=create_checksum(file, algorithm=algorithm),
+                algorithm=algorithm,
             )
-    write_csv(filename=csvfile, results=results)
+
+    # if filelist:
+    #     for file in track(filelist, console=console, description="Scanning ..."):
+    #         logger.info(f"Scanning {file.resolve()}")
+    #         results.append(
+    #             {
+    #                 "filename": str(file.resolve()),
+    #                 "algorithm": algorithm,
+    #                 "checksum": create_checksum(file, algorithm=algorithm),
+    #             }
+    #         )
+    # write_csv(filename=csvfile, results=results)
     logger.info("Scan complete.")
 
 
