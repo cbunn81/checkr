@@ -1,6 +1,7 @@
 # standard library imports
 import hashlib
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 import csv
 import logging
 import logging.handlers
@@ -159,16 +160,45 @@ def store_result_in_csv(
     csvfilepath = Path(csvfilename).resolve()
     csvfilepath.parent.mkdir(parents=True, exist_ok=True)
     checkfilepath = Path(checkfilename).resolve()
+    file_exists = csvfilepath.is_file()
     with open(csvfilepath, "a", newline="") as csvfile:
         fieldnames = ["filename", "algorithm", "checksum"]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         # write the header if this is a new file to be created
-        if not csvfilepath.is_file():
+        if not file_exists:
             writer.writeheader()
             logger.info(f"File {csvfilename} doesn't exist. Creating.")
         writer.writerow(
             {"filename": checkfilepath, "algorithm": algorithm, "checksum": checksum}
         )
+
+
+def update_result_in_csv(
+    csvfilename: str, checkfilename: str, checksum: str, algorithm: str = "blake2b"
+) -> None:
+    logger = logging.getLogger("checkr")
+    tempfile = NamedTemporaryFile(mode="w", delete=False)
+    tempfilepath = Path(tempfile.name).resolve()
+    filepath = Path(csvfilename).resolve()
+    with open(filepath, "r", newline="") as csvfile, tempfile:
+        fieldnames = ["filename", "algorithm", "checksum"]
+        reader = csv.DictReader(csvfile)
+        writer = csv.DictWriter(tempfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in reader:
+            if (
+                row["filename"].strip() == str(checkfilename).strip()
+                and row["algorithm"].strip() == algorithm.strip()
+            ):
+                logger.info(f"Updating stored record for file {checkfilename}.")
+                row["checksum"] = checksum
+            row = {
+                "filename": row["filename"],
+                "algorithm": row["algorithm"],
+                "checksum": row["checksum"],
+            }
+            writer.writerow(row)
+    tempfilepath.replace(filepath)
 
 
 def get_stored_checksum_from_csv(
@@ -316,24 +346,26 @@ def scan(
     if filelist:
         for file in track(filelist, console=console, description="Scanning ..."):
             logger.info(f"Scanning {file.resolve()}")
-            store_result_in_csv(
+            # TODO - check if there's already a result in the CSV, and if so, update it
+            if csvfilepath.is_file() and get_stored_checksum_from_csv(
                 csvfilename=csvfilepath,
-                checkfilename=file.resolve(),
-                checksum=create_checksum(file, algorithm=algorithm),
+                checkfilename=str(file.resolve()),
                 algorithm=algorithm,
-            )
+            ):
+                update_result_in_csv(
+                    csvfilename=csvfilepath,
+                    checkfilename=file.resolve(),
+                    checksum=create_checksum(file, algorithm=algorithm),
+                    algorithm=algorithm,
+                )
+            else:
+                store_result_in_csv(
+                    csvfilename=csvfilepath,
+                    checkfilename=file.resolve(),
+                    checksum=create_checksum(file, algorithm=algorithm),
+                    algorithm=algorithm,
+                )
 
-    # if filelist:
-    #     for file in track(filelist, console=console, description="Scanning ..."):
-    #         logger.info(f"Scanning {file.resolve()}")
-    #         results.append(
-    #             {
-    #                 "filename": str(file.resolve()),
-    #                 "algorithm": algorithm,
-    #                 "checksum": create_checksum(file, algorithm=algorithm),
-    #             }
-    #         )
-    # write_csv(filename=csvfile, results=results)
     logger.info("Scan complete.")
 
 
