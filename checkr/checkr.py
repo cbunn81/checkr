@@ -13,6 +13,9 @@ from rich.console import Console
 from rich.logging import RichHandler
 from rich.progress import track
 
+# local imports
+from models import File
+
 
 # To do list
 # - DONE - Basic: Run checksum on a directory of files
@@ -224,8 +227,8 @@ def get_stored_checksum_from_csv(
     Returns:
         str: The checksum digest stored in the CSV file, if any.
     """
-    filepath = Path(csvfilename).resolve()
-    with open(filepath, newline="") as csvfile:
+    csvfilepath = Path(csvfilename).resolve()
+    with open(csvfilepath, newline="") as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
             if row["filename"] == checkfilename and row["algorithm"] == algorithm:
@@ -259,6 +262,39 @@ def check_file_against_csv(
         logger.warning(
             f"No checksum exists for file ({checkfilename}) in CSV file ({csvfile})."
         )
+
+
+def store_result_in_db(
+    checkfilename: str, checksum: str, algorithm: str = "blake2b"
+) -> None:
+    File.create(path=checkfilename, algorithm_name=algorithm, checksum=checksum)
+
+
+def update_result_in_db(
+    checkfilename: str, checksum: str, algorithm: str = "blake2b"
+) -> None:
+    File.update_checksum(
+        path=checkfilename, algorithm_name=algorithm, checksum=checksum
+    )
+
+
+def get_stored_checksum_from_db(checkfilename: str, algorithm: str = "blake2b") -> None:
+    return File.get_checksum(path=checkfilename, algorithm_name=algorithm)
+
+
+def check_file_against_db(checkfilename: str, algorithm: str = "blake2b") -> bool:
+    logger = logging.getLogger("checkr")
+    stored_checksum = get_stored_checksum_from_db(
+        checkfilename=checkfilename, algorithm=algorithm
+    )
+    if stored_checksum is not None:
+        new_checksum = create_checksum(filename=checkfilename, algorithm=algorithm)
+        if stored_checksum == new_checksum:
+            return True
+        else:
+            return False
+    else:
+        logger.warning(f"No checksum exists for file ({checkfilename}) in database.")
 
 
 def get_filelist(paths: list[str], recursive: bool = False) -> list[str]:
@@ -351,31 +387,45 @@ def scan(
     console = Console(stderr=True)
     logger = start_logging(console_level=loglevel, filename=logfile, console=console)
 
-    csvfilepath = Path(csvfile).resolve()
+    # csvfilepath = Path(csvfile).resolve()
     filelist = get_filelist(paths=paths, recursive=recursive)
     if filelist:
         for file in track(filelist, console=console, description="Scanning ..."):
-            logger.info(f"Scanning {file.resolve()}")
-            # check if there's already a result in the CSV, and if so, update it
-            if csvfilepath.is_file() and get_stored_checksum_from_csv(
-                csvfilename=csvfilepath,
-                checkfilename=str(file.resolve()),
-                algorithm=algorithm,
-            ):
-                update_result_in_csv(
-                    csvfilename=csvfilepath,
-                    checkfilename=file.resolve(),
-                    checksum=create_checksum(file, algorithm=algorithm),
+            filename = str(file.resolve())
+            logger.info(f"Scanning {filename}")
+            # check if there's already a result in the DB, and if so, update it
+            if get_stored_checksum_from_db(checkfilename=filename, algorithm=algorithm):
+                update_result_in_db(
+                    checkfilename=filename,
+                    checksum=create_checksum(filename, algorithm=algorithm),
                     algorithm=algorithm,
                 )
-            # otherwise, store the file normally
+            # otherwise store the result normally
             else:
-                store_result_in_csv(
-                    csvfilename=csvfilepath,
-                    checkfilename=file.resolve(),
-                    checksum=create_checksum(file, algorithm=algorithm),
-                    algorithm=algorithm,
+                store_result_in_db(
+                    checkfilename=filename,
+                    checksum=create_checksum(filename, algorithm=algorithm),
                 )
+            # # check if there's already a result in the CSV, and if so, update it
+            # if csvfilepath.is_file() and get_stored_checksum_from_csv(
+            #     csvfilename=csvfilepath,
+            #     checkfilename=str(file.resolve()),
+            #     algorithm=algorithm,
+            # ):
+            #     update_result_in_csv(
+            #         csvfilename=csvfilepath,
+            #         checkfilename=file.resolve(),
+            #         checksum=create_checksum(file, algorithm=algorithm),
+            #         algorithm=algorithm,
+            #     )
+            # # otherwise, store the file normally
+            # else:
+            #     store_result_in_csv(
+            #         csvfilename=csvfilepath,
+            #         checkfilename=file.resolve(),
+            #         checksum=create_checksum(file, algorithm=algorithm),
+            #         algorithm=algorithm,
+            #     )
     logger.info("Scan complete.")
 
 
@@ -451,16 +501,18 @@ def check(
     total = 0
     if filelist:
         for file in track(filelist, console=console, description="Checking ..."):
-            logger.info(f"Checking {file.resolve()}")
-            if check_file_against_csv(
-                csvfile=csvfile,
-                checkfilename=str(file.resolve()),
-                algorithm=algorithm,
-            ):
-                logger.info(f"File ({file.resolve()}) passed the check.")
+            filename = str(file.resolve())
+            logger.info(f"Checking {filename}")
+            if check_file_against_db(checkfilename=filename, algorithm=algorithm):
+                # if check_file_against_csv(
+                #     csvfile=csvfile,
+                #     checkfilename=str(file.resolve()),
+                #     algorithm=algorithm,
+                # ):
+                logger.info(f"File ({filename}) passed the check.")
                 num_good += 1
             else:
-                logger.warning(f"File ({file.resolve()}) FAILED the check.")
+                logger.warning(f"File ({filename}) FAILED the check.")
                 num_bad += 1
             total += 1
         end_message = f"Check completed. {num_bad} files failed out of {total} total files checked."
