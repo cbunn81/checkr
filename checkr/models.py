@@ -88,6 +88,16 @@ class File(BaseMixin, TimestampMixin, Base):
             except IntegrityError:
                 session.rollback()
 
+    @classmethod
+    def get_checksum(cls, path: str, algorithm_name: str) -> str:
+        algorithm = Algorithm.get_by_name(name=algorithm_name)
+        with Session() as session:
+            return session.execute(
+                select(cls.checksum).where(
+                    cls.path == path and cls.algorithm == algorithm
+                )
+            ).scalar_one_or_none()
+
 
 Index("path_algorithm_index", File.path, File.algorithm_id, unique=True)
 
