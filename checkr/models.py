@@ -1,3 +1,7 @@
+# standard library imports
+import logging
+
+# third party imports
 from sqlalchemy import (
     create_engine,
     select,
@@ -6,11 +10,12 @@ from sqlalchemy import (
     Integer,
     Text,
     DateTime,
+    Index,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker, declarative_mixin
 from sqlalchemy.sql import func
-import logging
+from sqlalchemy.exc import IntegrityError
 
 
 logging.basicConfig(filename="sqlalchemy.log", encoding="utf-8", level=logging.DEBUG)
@@ -40,14 +45,17 @@ class BaseMixin(object):
         obj = cls(**kwargs)
         with Session() as session:
             session.add(obj)
-            session.commit()
+            try:
+                session.commit()
+            except IntegrityError:
+                session.rollback()
 
 
 class Algorithm(BaseMixin, TimestampMixin, Base):
     __tablename__ = "algorithms"
 
     id = Column(Integer, primary_key=True)
-    name = Column(Text, nullable=False)
+    name = Column(Text, nullable=False, unique=True)
 
     @classmethod
     def get_by_name(cls, name: str) -> object:
@@ -67,7 +75,7 @@ class File(BaseMixin, TimestampMixin, Base):
     checksum = Column(Text, nullable=False)
 
     @classmethod
-    def create(cls, algorithm_name: str, **kwargs):
+    def create(cls, algorithm_name: str, **kwargs) -> None:
         algorithm = Algorithm.get_by_name(name=algorithm_name)
         if algorithm is None:
             Algorithm.create(name=algorithm_name)
@@ -75,7 +83,12 @@ class File(BaseMixin, TimestampMixin, Base):
         obj = cls(algorithm=algorithm, **kwargs)
         with Session() as session:
             session.add(obj)
-            session.commit()
+            try:
+                session.commit()
+            except IntegrityError:
+                session.rollback()
 
+
+Index("path_algorithm_index", File.path, File.algorithm_id, unique=True)
 
 Base.metadata.create_all(engine)
