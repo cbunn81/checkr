@@ -84,15 +84,19 @@ class File(BaseMixin, TimestampMixin, Base):
         super().create(**kwargs)
 
     @classmethod
-    def get_result(cls, path: str) -> dict:
+    def get_result(cls, path: str, algorithm_name: str) -> dict:
+        algorithm = Algorithm.get_by_name(name=algorithm_name)
         with Session() as session:
             return (
                 session.execute(
                     select(
-                        cls.path, Algorithm.name.label("algorithm_name"), cls.checksum
+                        cls.id,
+                        cls.path,
+                        Algorithm.name.label("algorithm_name"),
+                        cls.checksum,
                     )
                     .join(Algorithm)
-                    .where(cls.path == path)
+                    .where(cls.path == path and cls.algorithm == algorithm)
                 )
                 .one_or_none()
                 ._asdict()
