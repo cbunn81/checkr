@@ -160,6 +160,8 @@ def store_result_in_csv(
     csvfilepath = Path(csvfilename).resolve()
     csvfilepath.parent.mkdir(parents=True, exist_ok=True)
     checkfilepath = Path(checkfilename).resolve()
+    checkfilepath.parent.mkdir(parents=True, exist_ok=True)
+    # check if the CSV file already exists
     file_exists = csvfilepath.is_file()
     with open(csvfilepath, "a", newline="") as csvfile:
         fieldnames = ["filename", "algorithm", "checksum"]
@@ -176,6 +178,14 @@ def store_result_in_csv(
 def update_result_in_csv(
     csvfilename: str, checkfilename: str, checksum: str, algorithm: str = "blake2b"
 ) -> None:
+    """Update an existing result in a CSV file.
+
+    Args:
+        csvfilename (str): The CSV file holding the results.
+        checkfilename (str): The file that was checked.
+        checksum (str): The checksum result for the file.
+        algorithm (str, optional): The checksum algorithm used. Defaults to "blake2b".
+    """
     logger = logging.getLogger("checkr")
     tempfile = NamedTemporaryFile(mode="w", delete=False)
     tempfilepath = Path(tempfile.name).resolve()
@@ -346,7 +356,7 @@ def scan(
     if filelist:
         for file in track(filelist, console=console, description="Scanning ..."):
             logger.info(f"Scanning {file.resolve()}")
-            # TODO - check if there's already a result in the CSV, and if so, update it
+            # check if there's already a result in the CSV, and if so, update it
             if csvfilepath.is_file() and get_stored_checksum_from_csv(
                 csvfilename=csvfilepath,
                 checkfilename=str(file.resolve()),
@@ -358,6 +368,7 @@ def scan(
                     checksum=create_checksum(file, algorithm=algorithm),
                     algorithm=algorithm,
                 )
+            # otherwise, store the file normally
             else:
                 store_result_in_csv(
                     csvfilename=csvfilepath,
@@ -365,7 +376,6 @@ def scan(
                     checksum=create_checksum(file, algorithm=algorithm),
                     algorithm=algorithm,
                 )
-
     logger.info("Scan complete.")
 
 
