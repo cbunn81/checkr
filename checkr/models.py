@@ -5,6 +5,7 @@ import logging
 from sqlalchemy import (
     create_engine,
     select,
+    update,
     ForeignKey,
     Column,
     Integer,
@@ -111,6 +112,20 @@ class File(BaseMixin, TimestampMixin, Base):
                     cls.path == path and cls.algorithm == algorithm
                 )
             ).scalar_one_or_none()
+
+    @classmethod
+    def update_checksum(cls, path: str, algorithm_name: str, checksum: str) -> None:
+        algorithm = Algorithm.get_by_name(name=algorithm_name)
+        with Session() as session:
+            session.execute(
+                update(File)
+                .where(cls.path == path and cls.algorithm == algorithm)
+                .values(checksum=checksum)
+            )
+            try:
+                session.commit()
+            except IntegrityError:
+                session.rollback()
 
 
 Index("path_algorithm_index", File.path, File.algorithm_id, unique=True)
