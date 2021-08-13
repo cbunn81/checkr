@@ -41,7 +41,7 @@ class TimestampMixin:
 
 class BaseMixin(object):
     @classmethod
-    def create(cls, **kwargs):
+    def create(cls, **kwargs) -> None:
         obj = cls(**kwargs)
         with Session() as session:
             session.add(obj)
@@ -80,13 +80,8 @@ class File(BaseMixin, TimestampMixin, Base):
         if algorithm is None:
             Algorithm.create(name=algorithm_name)
             algorithm = Algorithm.get_by_name(name=algorithm_name)
-        obj = cls(algorithm=algorithm, **kwargs)
-        with Session() as session:
-            session.add(obj)
-            try:
-                session.commit()
-            except IntegrityError:
-                session.rollback()
+        kwargs["algorithm"] = algorithm
+        super().create(**kwargs)
 
     @classmethod
     def get_checksum(cls, path: str, algorithm_name: str) -> str:
