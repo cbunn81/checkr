@@ -1,9 +1,4 @@
-# standard library imports
-import logging
-
-# third party imports
 from sqlalchemy import (
-    create_engine,
     select,
     update,
     ForeignKey,
@@ -13,18 +8,10 @@ from sqlalchemy import (
     DateTime,
     Index,
 )
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker, declarative_mixin
+from sqlalchemy.orm import relationship, declarative_mixin
 from sqlalchemy.sql import func
 from sqlalchemy.exc import IntegrityError
-
-
-logging.basicConfig(filename="sqlalchemy.log", encoding="utf-8", level=logging.DEBUG)
-logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
-
-engine = create_engine("sqlite:///checkr.sqlite")
-Base = declarative_base()
-Session = sessionmaker(bind=engine)
+from database import Base, Session, engine
 
 
 @declarative_mixin
