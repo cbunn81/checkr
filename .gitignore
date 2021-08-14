@@ -2,3 +2,4 @@ data
 results.csv
 .env
 .vscode
+.vscode/settings.json
