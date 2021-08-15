@@ -1,20 +1,15 @@
 # standard library imports
-import hashlib
 from pathlib import Path
-from tempfile import NamedTemporaryFile
-import csv
-import logging
-import logging.handlers
 
 # third party imports
 import yaml
 import typer
 from rich.console import Console
-from rich.logging import RichHandler
 from rich.progress import track
 
 # local imports
-from models import File
+from helpers import start_logging, create_checksum, get_filelist
+from models import database as db, csvfile as cf
 
 
 # To do list
@@ -35,290 +30,27 @@ from models import File
 #           - consider removing default values and having default config file instead
 # - DONE - Intermediate: Use RichHandler to solve progress bar redirection issue
 # - DONE - Intermediate: Rotate log files
-# - TODO - Advanced: Switch to SQLAlchemy ORM instead of CSV files
-#           - OR have both as options?
+# - DONE - Advanced: Add SQLAlchemy ORM in addition to a CSV file option
+#           - DB is the default option
 # - TODO - Advanced: Test multithreading/multiprocessing
 
 app = typer.Typer(help="File Integrity Checker")
 
 
-def start_logging(
-    console: object,
-    file_level: str = "DEBUG",
-    console_level: str = "ERROR",
-    filename: str = Path.cwd() / "checkr.log",
-) -> object:
-    """Create a logger and initialize both logging to a file and to the console.
-
-    Args:
-        file_level (str): Logging level for the file handler
-        console_level (str): Logging level for the console handler
-        filename (str): Filename to store the file handler log output
-    """
-    fh_loglevel = getattr(logging, file_level.upper(), None)
-    if not isinstance(fh_loglevel, int):
-        raise ValueError(f"Invalid log level: {file_level}")
-    ch_loglevel = getattr(logging, console_level.upper(), None)
-    if not isinstance(ch_loglevel, int):
-        raise ValueError(f"Invalid log level: {console_level}")
-    logger = logging.getLogger("checkr")
-    # set a default log level threshold
-    logger.setLevel(logging.DEBUG)
-    # create file handler
-    filepath = Path(filename).resolve()
-    filepath.parent.mkdir(parents=True, exist_ok=True)
-    fh = logging.handlers.RotatingFileHandler(
-        filename=filepath, maxBytes=1_048_576, backupCount=5
-    )
-    fh.setLevel(level=fh_loglevel)
-    # create console handler using RichHandler so progress bar is redirected
-    ch = RichHandler(console=console)
-    ch.setLevel(level=ch_loglevel)
-    fh.setFormatter(
-        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    )
-    ch.setFormatter(logging.Formatter("%(levelname)s - %(message)s"))
-    # add the handlers to logger
-    logger.addHandler(fh)
-    logger.addHandler(ch)
-    return logger
-
-
-def md5(filename: str) -> str:
-    """Get MD5 digest for a file.
-
-    Args:
-        filename (str): The file to get an MD5 digest of.
-
-    Returns:
-        str: An MD5 digest.
-    """
-    with open(filename, "rb") as f:
-        file_hash = hashlib.md5()
-        while chunk := f.read(8192):
-            file_hash.update(chunk)
-    return file_hash.hexdigest()
-
-
-def blake2b(filename: str) -> str:
-    """Get blake2b digest for a file.
-
-    Args:
-        filename (str): The file to get a blake2b digest of.
-
-    Returns:
-        str: A blake2b hexdigest.
-    """
-    with open(filename, "rb") as f:
-        file_hash = hashlib.blake2b()
-        while chunk := f.read(8192):
-            file_hash.update(chunk)
-    return file_hash.hexdigest()
-
-
-def create_checksum(filename: str, algorithm: str = "blake2b") -> str:
-    """Create a checksum digest for a file.
-
-    Args:
-        filename (str): The file to get a checksum digest of.
-        algorithm (str, optional): The checksum algorithm to use. Defaults to "blake2b".
-
-    Returns:
-        str: A checksum digest.
-    """
-    if algorithm == "blake2b":
-        return blake2b(filename)
-    elif algorithm == "md5":
-        return md5(filename)
-
-
-def write_csv(filename: str, results: list[dict]):
-    """Create a CSV file and write the checksum results to it.
-
-    Args:
-        filename (str): The file to create.
-        results (list[dict]): A list of results to write to the CSV file. Each result is a dictionary with keys: filename, algorithm, checksum.
-    """
-    filepath = Path(filename).resolve()
-    filepath.parent.mkdir(parents=True, exist_ok=True)
-    with open(filepath, "w", newline="") as csvfile:
-        fieldnames = list(results[0].keys())
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(results)
-
-
-def store_result_in_csv(
-    csvfilename: str, checkfilename: str, checksum: str, algorithm: str = "blake2b"
-) -> None:
-    """Store a checksum result in a given csvfile, creating the file if needed.
-
-    Args:
-        csvfilename (str): The CSV file to use or create.
-        checkfilename (str): The file that was checked.
-        checksum (str): The checksum result for the file.
-        algorithm (str, optional): The checksum algorithm used. Defaults to "blake2b".
-    """
-    logger = logging.getLogger("checkr")
-    csvfilepath = Path(csvfilename).resolve()
-    csvfilepath.parent.mkdir(parents=True, exist_ok=True)
-    checkfilepath = Path(checkfilename).resolve()
-    checkfilepath.parent.mkdir(parents=True, exist_ok=True)
-    # check if the CSV file already exists
-    file_exists = csvfilepath.is_file()
-    with open(csvfilepath, "a", newline="") as csvfile:
-        fieldnames = ["filename", "algorithm", "checksum"]
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        # write the header if this is a new file to be created
-        if not file_exists:
-            writer.writeheader()
-            logger.info(f"File {csvfilename} doesn't exist. Creating.")
-        writer.writerow(
-            {"filename": checkfilepath, "algorithm": algorithm, "checksum": checksum}
+def scan_db(filename: str, algorithm: str) -> None:
+    # check if there's already a result in the DB, and if so, update it
+    if db.get_stored_checksum_from_db(checkfilename=filename, algorithm=algorithm):
+        db.update_result_in_db(
+            checkfilename=filename,
+            checksum=create_checksum(filename, algorithm=algorithm),
+            algorithm=algorithm,
         )
-
-
-def update_result_in_csv(
-    csvfilename: str, checkfilename: str, checksum: str, algorithm: str = "blake2b"
-) -> None:
-    """Update an existing result in a CSV file.
-
-    Args:
-        csvfilename (str): The CSV file holding the results.
-        checkfilename (str): The file that was checked.
-        checksum (str): The checksum result for the file.
-        algorithm (str, optional): The checksum algorithm used. Defaults to "blake2b".
-    """
-    logger = logging.getLogger("checkr")
-    tempfile = NamedTemporaryFile(mode="w", delete=False)
-    tempfilepath = Path(tempfile.name).resolve()
-    filepath = Path(csvfilename).resolve()
-    with open(filepath, "r", newline="") as csvfile, tempfile:
-        fieldnames = ["filename", "algorithm", "checksum"]
-        reader = csv.DictReader(csvfile)
-        writer = csv.DictWriter(tempfile, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in reader:
-            if (
-                row["filename"].strip() == str(checkfilename).strip()
-                and row["algorithm"].strip() == algorithm.strip()
-            ):
-                logger.info(f"Updating stored record for file {checkfilename}.")
-                row["checksum"] = checksum
-            row = {
-                "filename": row["filename"],
-                "algorithm": row["algorithm"],
-                "checksum": row["checksum"],
-            }
-            writer.writerow(row)
-    tempfilepath.replace(filepath)
-
-
-def get_stored_checksum_from_csv(
-    csvfilename: str, checkfilename: str, algorithm: str = "blake2b"
-) -> str:
-    """Retrieve a stored checksum digest from a CSV file of previous results.
-
-    Args:
-        csvfilename (str): A CSV file containing checksum results.
-        checkfilename (str): The file to check against the CSV file results.
-        algorithm (str, optional): The checksum algorithm to use. Defaults to "blake2b".
-
-    Returns:
-        str: The checksum digest stored in the CSV file, if any.
-    """
-    csvfilepath = Path(csvfilename).resolve()
-    with open(csvfilepath, newline="") as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            if row["filename"] == checkfilename and row["algorithm"] == algorithm:
-                return row["checksum"]
-
-
-def check_file_against_csv(
-    csvfile: str, checkfilename: str, algorithm: str = "blake2b"
-) -> bool:
-    """Compare a previously generated checksum from a CSV file with a newly generated one.
-
-    Args:
-        csvfile (str): The CSV file containing the previously generated checksum.
-        checkfilename (str): The file to check.
-        algorithm (str, optional): The checksum algorithm to use. Defaults to "blake2b".
-
-    Returns:
-        bool: True if the checksums match, otherwise False.
-    """
-    logger = logging.getLogger("checkr")
-    stored_checksum = get_stored_checksum_from_csv(
-        csvfilename=csvfile, checkfilename=checkfilename, algorithm=algorithm
-    )
-    if stored_checksum is not None:
-        new_checksum = create_checksum(filename=checkfilename, algorithm=algorithm)
-        if stored_checksum == new_checksum:
-            return True
-        else:
-            return False
+    # otherwise store the result normally
     else:
-        logger.warning(
-            f"No checksum exists for file ({checkfilename}) in CSV file ({csvfile})."
+        db.store_result_in_db(
+            checkfilename=filename,
+            checksum=create_checksum(filename, algorithm=algorithm),
         )
-
-
-def store_result_in_db(
-    checkfilename: str, checksum: str, algorithm: str = "blake2b"
-) -> None:
-    File.create(path=checkfilename, algorithm_name=algorithm, checksum=checksum)
-
-
-def update_result_in_db(
-    checkfilename: str, checksum: str, algorithm: str = "blake2b"
-) -> None:
-    File.update_checksum(
-        path=checkfilename, algorithm_name=algorithm, checksum=checksum
-    )
-
-
-def get_stored_checksum_from_db(checkfilename: str, algorithm: str = "blake2b") -> None:
-    return File.get_checksum(path=checkfilename, algorithm_name=algorithm)
-
-
-def check_file_against_db(checkfilename: str, algorithm: str = "blake2b") -> bool:
-    logger = logging.getLogger("checkr")
-    stored_checksum = get_stored_checksum_from_db(
-        checkfilename=checkfilename, algorithm=algorithm
-    )
-    if stored_checksum is not None:
-        new_checksum = create_checksum(filename=checkfilename, algorithm=algorithm)
-        if stored_checksum == new_checksum:
-            return True
-        else:
-            return False
-    else:
-        logger.warning(f"No checksum exists for file ({checkfilename}) in database.")
-
-
-def get_filelist(paths: list[str], recursive: bool = False) -> list[str]:
-    """Get a list of files (but not directories) from a path.
-
-    Args:
-        paths (list[str]): The path(s) to search for files.
-        recursive (bool, optional): Whether to recursively search the path. Defaults to False.
-
-    Returns:
-        list[str]: A list of all filenames, given as absolute paths.
-    """
-    logger = logging.getLogger("checkr")
-    filelist = []
-    for path in paths:
-        dir = Path(path)
-        if not dir.exists():
-            logger.error(f"The directory '{dir}' does not exist.")
-        elif not dir.is_dir():
-            logger.error(f"'{dir}' is not a directory.")
-        else:
-            results = dir.rglob("*") if recursive else dir.glob("*")
-            filelist.extend([x for x in results if x.is_file()])
-    return filelist
 
 
 @app.command()
@@ -328,8 +60,12 @@ def scan(
         help="The paths containing files to be checked. Can be multiple.",
     ),
     csvfile: str = typer.Option(
-        Path.home() / ".checkr/results.csv",
-        help="The CSV file to hold the results. Defaults to '~/.checkr/results.csv'. When scanning, any existing file of the same name is overwritten.",
+        None,
+        help="The CSV file to hold the results. A good location is '~/.checkr/results.csv'. When scanning, any existing file of the same name is overwritten.",
+    ),
+    usedb: bool = typer.Option(
+        True,
+        help="Whether to use a database to store results. Defaults to True. Set config in '.env' file.",
     ),
     algorithm: str = typer.Option("blake2b", help="The checksum algorithm to use."),
     recursive: bool = typer.Option(
@@ -358,7 +94,7 @@ def scan(
         Path.home() / ".checkr/checkr.log",
         "--log",
         "-l",
-        help="A file to use as a log of operations.",
+        help="A file to use as a log of operations. Defaults to '~/.checkr/checkr.log'.",
     ),
 ):
     """
@@ -370,6 +106,7 @@ def scan(
             config = yaml.safe_load(cf_file.read())
         paths = config.get("paths", paths)
         csvfile = config.get("csvfile", csvfile)
+        usedb = config.get("usedb", usedb)
         algorithm = config.get("algorithm", algorithm)
         recursive = config.get("recursive", recursive)
         verbose = config.get("verbose", verbose)
@@ -387,45 +124,41 @@ def scan(
     console = Console(stderr=True)
     logger = start_logging(console_level=loglevel, filename=logfile, console=console)
 
-    # csvfilepath = Path(csvfile).resolve()
+    if csvfile:
+        csvfilepath = Path(csvfile).resolve()
     filelist = get_filelist(paths=paths, recursive=recursive)
     if filelist:
         for file in track(filelist, console=console, description="Scanning ..."):
             filename = str(file.resolve())
             logger.info(f"Scanning {filename}")
             # check if there's already a result in the DB, and if so, update it
-            if get_stored_checksum_from_db(checkfilename=filename, algorithm=algorithm):
-                update_result_in_db(
+            if usedb:
+                scan_db(filename, algorithm)
+            elif csvfile:
+                # check if there's already a result in the CSV, and if so, update it
+                if csvfilepath.is_file() and cf.get_stored_checksum_from_csv(
+                    csvfilename=csvfilepath,
                     checkfilename=filename,
-                    checksum=create_checksum(filename, algorithm=algorithm),
                     algorithm=algorithm,
-                )
-            # otherwise store the result normally
+                ):
+                    cf.update_result_in_csv(
+                        csvfilename=csvfilepath,
+                        checkfilename=filename,
+                        checksum=create_checksum(file, algorithm=algorithm),
+                        algorithm=algorithm,
+                    )
+                # otherwise, store the file normally
+                else:
+                    cf.store_result_in_csv(
+                        csvfilename=csvfilepath,
+                        checkfilename=filename,
+                        checksum=create_checksum(filename, algorithm=algorithm),
+                        algorithm=algorithm,
+                    )
             else:
-                store_result_in_db(
-                    checkfilename=filename,
-                    checksum=create_checksum(filename, algorithm=algorithm),
-                )
-            # # check if there's already a result in the CSV, and if so, update it
-            # if csvfilepath.is_file() and get_stored_checksum_from_csv(
-            #     csvfilename=csvfilepath,
-            #     checkfilename=str(file.resolve()),
-            #     algorithm=algorithm,
-            # ):
-            #     update_result_in_csv(
-            #         csvfilename=csvfilepath,
-            #         checkfilename=file.resolve(),
-            #         checksum=create_checksum(file, algorithm=algorithm),
-            #         algorithm=algorithm,
-            #     )
-            # # otherwise, store the file normally
-            # else:
-            #     store_result_in_csv(
-            #         csvfilename=csvfilepath,
-            #         checkfilename=file.resolve(),
-            #         checksum=create_checksum(file, algorithm=algorithm),
-            #         algorithm=algorithm,
-            #     )
+                logger.warning("Neither a database or CSV file option chosen.")
+                print("You must choose either to use a database or CSV file.")
+                break
     logger.info("Scan complete.")
 
 
@@ -436,8 +169,12 @@ def check(
         help="The paths containing files to be checked. Can be multiple.",
     ),
     csvfile: str = typer.Option(
-        Path.home() / ".checkr/results.csv",
-        help="The CSV file holding results of a previous scan to check against. Defaults to '~/.checkr/results.csv'.",
+        None,
+        help="The CSV file holding results of a previous scan to check against. A good location is '~/.checkr/results.csv'.",
+    ),
+    usedb: bool = typer.Option(
+        True,
+        help="Whether to use a database for results. Defaults to True. Set config in '.env' file.",
     ),
     algorithm: str = typer.Option("blake2b", help="The checksum algorithm to use."),
     recursive: bool = typer.Option(
@@ -466,7 +203,7 @@ def check(
         Path.home() / ".checkr/checkr.log",
         "--log",
         "-l",
-        help="A file to use as a log of operations.",
+        help="A file to use as a log of operations. Defaults to '~/.checkr/checkr.log'.",
     ),
 ):
     """
@@ -478,6 +215,7 @@ def check(
             config = yaml.safe_load(cf_file.read())
         paths = config.get("paths", paths)
         csvfile = config.get("csvfile", csvfile)
+        usedb = config.get("usedb", usedb)
         algorithm = config.get("algorithm", algorithm)
         recursive = config.get("recursive", recursive)
         verbose = config.get("verbose", verbose)
@@ -503,30 +241,34 @@ def check(
         for file in track(filelist, console=console, description="Checking ..."):
             filename = str(file.resolve())
             logger.info(f"Checking {filename}")
-            if check_file_against_db(checkfilename=filename, algorithm=algorithm):
-                # if check_file_against_csv(
-                #     csvfile=csvfile,
-                #     checkfilename=str(file.resolve()),
-                #     algorithm=algorithm,
-                # ):
-                logger.info(f"File ({filename}) passed the check.")
-                num_good += 1
+            if usedb:
+                if db.check_file_against_db(
+                    checkfilename=filename, algorithm=algorithm
+                ):
+                    logger.info(f"File ({filename}) passed the check.")
+                    num_good += 1
+                else:
+                    logger.warning(f"File ({filename}) FAILED the check.")
+                    num_bad += 1
+            elif csvfile:
+                if cf.check_file_against_csv(
+                    csvfile=csvfile,
+                    checkfilename=str(file.resolve()),
+                    algorithm=algorithm,
+                ):
+                    logger.info(f"File ({filename}) passed the check.")
+                    num_good += 1
+                else:
+                    logger.warning(f"File ({filename}) FAILED the check.")
+                    num_bad += 1
             else:
-                logger.warning(f"File ({filename}) FAILED the check.")
-                num_bad += 1
+                logger.warning("Neither a database or CSV file option chosen.")
+                print("You must choose either to use a database or CSV file.")
+                break
             total += 1
         end_message = f"Check completed. {num_bad} files failed out of {total} total files checked."
         print(end_message)
         logger.info(end_message)
-
-
-def main():
-    directory = "/Users/cbunn/projects/checkr/data/"
-    results = scan(directory)
-    print(results)
-    csvfile = "/Users/cbunn/projects/checkr/results.csv"
-    write_csv(csvfile, results)
-    check(csvfile=csvfile, path=directory)
 
 
 if __name__ == "__main__":

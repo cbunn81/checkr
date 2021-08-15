@@ -1,3 +1,7 @@
+# standard library imports
+import logging
+
+# third party imports
 from sqlalchemy import (
     select,
     update,
@@ -11,7 +15,10 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship, declarative_mixin
 from sqlalchemy.sql import func
 from sqlalchemy.exc import IntegrityError
-from database import Base, Session, engine
+
+# local imports
+from models.database_config import Base, Session, engine
+from helpers import create_checksum
 
 
 @declarative_mixin
@@ -118,3 +125,36 @@ class File(BaseMixin, TimestampMixin, Base):
 Index("path_algorithm_index", File.path, File.algorithm_id, unique=True)
 
 Base.metadata.create_all(engine)
+
+
+def store_result_in_db(
+    checkfilename: str, checksum: str, algorithm: str = "blake2b"
+) -> None:
+    File.create(path=checkfilename, algorithm_name=algorithm, checksum=checksum)
+
+
+def update_result_in_db(
+    checkfilename: str, checksum: str, algorithm: str = "blake2b"
+) -> None:
+    File.update_checksum(
+        path=checkfilename, algorithm_name=algorithm, checksum=checksum
+    )
+
+
+def get_stored_checksum_from_db(checkfilename: str, algorithm: str = "blake2b") -> None:
+    return File.get_checksum(path=checkfilename, algorithm_name=algorithm)
+
+
+def check_file_against_db(checkfilename: str, algorithm: str = "blake2b") -> bool:
+    logger = logging.getLogger("checkr")
+    stored_checksum = get_stored_checksum_from_db(
+        checkfilename=checkfilename, algorithm=algorithm
+    )
+    if stored_checksum is not None:
+        new_checksum = create_checksum(filename=checkfilename, algorithm=algorithm)
+        if stored_checksum == new_checksum:
+            return True
+        else:
+            return False
+    else:
+        logger.warning(f"No checksum exists for file ({checkfilename}) in database.")

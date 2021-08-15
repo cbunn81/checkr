@@ -16,6 +16,9 @@ paths:
 # When scanning, any existing file of the same name is overwritten.
 csvfile: /path/to/results.csv
 
+# A flag to choose whether to use a database. Default is true.
+usedb: True
+
 # A file to log operations. Defaults to '~/.checkr/checkr.log'. It logs
 #  at DEBUG level and appends messages instead of overwriting.
 logfile: /path/to/checkr.log
