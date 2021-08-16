@@ -12,12 +12,15 @@ paths:
   - /path/to/data2
   - /path/to/data3
 
-# The CSV file to hold the results. Defaults to '~/.checkr/results.csv'.
-# When scanning, any existing file of the same name is overwritten.
-csvfile: /path/to/results.csv
-
 # A flag to choose whether to use a database. Default is true.
 usedb: True
+
+# The CSV file to hold the results. Since a database is used by default,
+# no default CSV file path is set. To override this behavior and use a
+# CSV file, first set the above 'usedb' option to 'False' and then set
+# a path to your CSV file below.
+# NOTE: When scanning, any existing file of the same name is overwritten.
+#csvfile: /path/to/results.csv
 
 # A file to log operations. Defaults to '~/.checkr/checkr.log'. It logs
 #  at DEBUG level and appends messages instead of overwriting.
