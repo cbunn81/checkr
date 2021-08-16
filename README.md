@@ -81,6 +81,12 @@ The simplest option is to use SQLite. To set the SQLite database file to the cur
 SQLALCHEMY_DATABASE_URL = "sqlite:///checkr.sqlite"
 ```
 
+You also need to set a location for the SQLAlchemy log file (make sure it's an absolute path):
+
+```
+SQLALCHEMY_LOG = "/path/to/sqlalchemy.log"
+```
+
 ---
 
 ### Setting options on the command line
