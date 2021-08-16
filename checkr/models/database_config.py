@@ -11,8 +11,9 @@ from sqlalchemy.orm import sessionmaker
 
 load_dotenv()
 SQLALCHEMY_DATABASE_URL = os.getenv("SQLALCHEMY_DATABASE_URL")
+SQLALCHEMY_LOG = os.getenv("SQLALCHEMY_LOG")
 
-logging.basicConfig(filename="sqlalchemy.log", encoding="utf-8", level=logging.DEBUG)
+logging.basicConfig(filename=SQLALCHEMY_LOG, encoding="utf-8", level=logging.DEBUG)
 logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
 
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
