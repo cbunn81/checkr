@@ -4,9 +4,40 @@ checkr is a file integrity checker. It can scan a directory or list of directori
 
 There are two options for storage of the results: a database or a CSV file. By default, a database is used, but if you prefer you can set the appropriate options below to use a CSV file instead.
 
----
+<br>
 
 ---
+
+<br>
+
+## Installation
+
+### Clone the repo
+
+```bash
+git clone https://github.com/cbunn81/checkr.git
+```
+
+### Install the dependencies (preferably after creating a virtual environment)
+
+```bash
+pip install -r requirements.txt
+```
+
+### Rename the example config and env files
+
+```bash
+mv .env.example .env
+mv config.yml.example config.yml
+```
+
+Then edit those files as shown below to suit your needs.
+
+<br>
+
+---
+
+<br>
 
 ## Usage
 
