@@ -38,6 +38,13 @@ app = typer.Typer(help="File Integrity Checker")
 
 
 def scan_db(filename: str, algorithm: str) -> None:
+    """Scan a file and enter its result into the database,
+    updating if there is already an existing result.
+
+    Args:
+        filename (str): The file to scan.
+        algorithm (str): The algorithm to use.
+    """
     # check if there's already a result in the DB, and if so, update it
     if db.get_stored_checksum_from_db(checkfilename=filename, algorithm=algorithm):
         db.update_result_in_db(
