@@ -1,5 +1,7 @@
 # checkr
 
+![Example terminal execution](/checkr.gif "Example terminal execution")
+
 checkr is a file integrity checker. It can scan a directory or list of directories, generating checksum digests for all files, and it can subsequently check those files to see if the checksum digests have changed, which would indicate either a modification or a corruption of the file.
 
 There are two options for storage of the results: a database or a CSV file. By default, a database is used, but if you prefer you can set the appropriate options below to use a CSV file instead.
